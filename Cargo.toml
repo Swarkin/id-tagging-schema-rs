@@ -1,0 +1,9 @@
+[workspace]
+resolver = "3"
+members = ["id-tagging-schema", "id-tagging-schema-types"]
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+id-tagging-schema-types = { path = "id-tagging-schema-types" }

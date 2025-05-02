@@ -1,3 +1,5 @@
 /target
-/.idea
 Cargo.lock
+
+/.idea
+/id-tagging-schema/id-tagging-schema
