@@ -6,9 +6,11 @@ edition = "2024"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+phf.workspace = true
 id-tagging-schema-types.workspace = true
 
 [build-dependencies]
 serde.workspace = true
 serde_json.workspace = true
+phf.workspace = true
 id-tagging-schema-types.workspace = true

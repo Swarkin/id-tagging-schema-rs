@@ -7,18 +7,18 @@ fn path(path: &str) -> String {
 }
 
 fn main() -> std::io::Result<()> {
-	// Categories
-	let category_dir = PathBuf::from(path("preset_categories"));
 	let out_dir = std::env::var("OUT_DIR").unwrap();
-	
-	let mut generated = concat!("use std::sync::LazyLock;\n", "use id_tagging_schema_types::*;\n").to_string();
 
+	// Categories
+	let mut generated = "use id_tagging_schema_types::*;\n".to_string();
+
+	let category_dir = PathBuf::from(path("preset_categories"));
 	for entry in read_dir(category_dir)?.map(|x| x.unwrap()) {
 		let path = entry.path();
 
 		if entry.file_type()?.is_file() && path.extension().map(|x| x == "json").unwrap_or(false) {
 			let json_str = std::fs::read_to_string(&path)?;
-			let category = serde_json::from_str::<Category>(&json_str)?;
+			let category = serde_json::from_str::<RawCategory>(&json_str)?;
 
 			let ident = path
 				.file_stem()
@@ -30,11 +30,11 @@ fn main() -> std::io::Result<()> {
 
 			generated.push_str(&format!(
 				concat!(
-					"\npub static {}: LazyLock<Category> = LazyLock::new(|| Category {{\n",
-					"\ticon: {:?}.into(),\n",
-					"\tname: {:?}.into(),\n",
-					"\tmembers: vec![{}],\n",
-					"}});\n"
+					"\npub const {}: Category = Category {{\n",
+					"\ticon: {:?},\n",
+					"\tname: {:?},\n",
+					"\tmembers: &[{}],\n",
+					"}};\n"
 				),
 				ident,
 				category.icon,
@@ -42,7 +42,7 @@ fn main() -> std::io::Result<()> {
 				category
 					.members
 					.into_iter()
-					.map(|x| format!("{x:?}.into(), "))
+					.map(|x| format!("{x:?}, "))
 					.collect::<String>()
 			));
 		}
@@ -53,8 +53,7 @@ fn main() -> std::io::Result<()> {
 
 	// Presets
 	let mut generated = concat!(
-		"use std::sync::LazyLock;\n",
-		"use std::collections::HashMap;\n",
+		"use phf::phf_map;\n",
 		"use id_tagging_schema_types::{*, Geometry::*};\n",
 	)
 	.to_string();
@@ -63,9 +62,8 @@ fn main() -> std::io::Result<()> {
 	for entry in read_dir(preset_dir)?.map(|x| x.unwrap()) {
 		let path = entry.path();
 		if entry.file_type()?.is_file() && path.extension().map(|x| x == "json").unwrap() && !path.starts_with("_") {
-			println!("{path:?}");
 			let json_str = std::fs::read_to_string(&path)?;
-			let preset = serde_json::from_str::<Preset>(&json_str)?;
+			let preset = serde_json::from_str::<RawPreset>(&json_str)?;
 
 			let ident = path
 				.file_stem()
@@ -77,16 +75,16 @@ fn main() -> std::io::Result<()> {
 
 			generated.push_str(&format!(
 				concat!(
-					"\npub static {}: LazyLock<Preset> = LazyLock::new(|| Preset {{\n",
+					"\npub const {}: Preset = Preset {{\n",
 					"\ticon: {},\n",
-					"\tname: {:?}.into(),\n",
-					"\tfields: vec![{}],\n",
-					"\tmore_fields: vec![{}],\n",
-					"\tgeometry: vec!{:?},\n",
-					"\ttags: {{\n\t\tlet mut x = HashMap::new();\n\t\t{}\n\t\tx\n\t}},\n",
-					"\tterms: vec![{}],\n",
+					"\tname: {:?},\n",
+					"\tfields: &[{}],\n",
+					"\tmore_fields: &[{}],\n",
+					"\tgeometry: &{:?},\n",
+					"\ttags: phf_map! {{{}}},\n",
+					"\tterms: &[{}],\n",
 					"\tmatch_score: {},\n",
-					"}});\n"
+					"}};\n"
 				),
 				ident,
 				{
@@ -98,39 +96,27 @@ fn main() -> std::io::Result<()> {
 						Some(icon) => {
 							string.push_str("Some(\"");
 							string.push_str(&icon);
-							string.push_str("\".into())");
+							string.push_str("\")");
 						}
 					}
 					string
 				},
 				preset.name,
-				preset
-					.fields
-					.into_iter()
-					.map(|x| format!("{x:?}.into(), "))
-					.collect::<String>(),
-				preset
-					.more_fields
-					.into_iter()
-					.map(|x| format!("{x:?}.into(), "))
-					.collect::<String>(),
+				vec_to_str(preset.fields),
+				vec_to_str(preset.more_fields),
 				preset.geometry,
 				{
 					let mut string = String::new();
 					for (k, v) in preset.tags {
-						string.push_str(&format!("x.insert({k:?}.into(), {v:?}.into()); "));
+						string.push_str(&format!("\t\"{k}\" => \"{v}\",\n"));
 					}
 					string
 				},
-				preset
-					.terms
-					.into_iter()
-					.map(|x| format!("{x:?}.into(), "))
-					.collect::<String>(),
+				vec_to_str(preset.terms),
 				{
 					match preset.match_score {
 						None => String::from("None"),
-						Some(score) => format!("Some(\"{score}\".into())"),
+						Some(score) => format!("Some(\"{score}\")"),
 					}
 				},
 			));
@@ -140,5 +126,38 @@ fn main() -> std::io::Result<()> {
 	let dest_path = PathBuf::from(&out_dir).join("preset_data.rs");
 	std::fs::write(dest_path, generated)?;
 
+	// preset_defaults.json
+	let mut generated = concat!("use id_tagging_schema_types::*;\n").to_string();
+
+	let preset_defaults_file = PathBuf::from(path("preset_defaults.json"));
+	let json_str = std::fs::read_to_string(preset_defaults_file)?;
+	let preset = serde_json::from_str::<RawPresetDefaults>(&json_str)?;
+
+	generated.push_str(&format!(
+		concat!(
+			"\npub const PRESET_DEFAULTS: PresetDefaults = PresetDefaults {{\n",
+			"\tarea: &[{}],\n",
+			"\tline: &[{}],\n",
+			"\tpoint: &[{}],\n",
+			"\tvertex: &[{}],\n",
+			"\trelation: &[{}],\n",
+			"}};\n"
+		),
+		vec_to_str(preset.area),
+		vec_to_str(preset.line),
+		vec_to_str(preset.point),
+		vec_to_str(preset.vertex),
+		vec_to_str(preset.relation),
+	));
+
+	let dest_path = PathBuf::from(&out_dir).join("preset_defaults.rs");
+	std::fs::write(dest_path, generated)?;
+
 	Ok(())
+}
+
+fn vec_to_str(vec: Vec<impl std::fmt::Debug>) -> String {
+	vec.into_iter()
+		.map(|x| format!("{x:?}, "))
+		.collect::<String>()
 }

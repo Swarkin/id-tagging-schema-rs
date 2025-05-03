@@ -1,12 +1,12 @@
 mod category;
 mod preset;
+mod preset_defaults;
 
-use serde::Deserialize;
+pub use category::*;
+pub use preset::*;
+pub use preset_defaults::*;
 
-pub use category::Category;
-pub use preset::Preset;
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Copy, Clone, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Geometry {
 	Point,

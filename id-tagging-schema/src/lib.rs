@@ -1,5 +1,6 @@
 pub mod category;
 pub mod preset;
+pub mod preset_defaults;
 
 #[cfg(test)]
 mod tests {
@@ -7,13 +8,16 @@ mod tests {
 
 	#[test]
 	fn category() {
-		let _ = *category::BARRIER;
-		dbg!(&category::BARRIER);
+		dbg!(category::BARRIER);
 	}
 
 	#[test]
 	fn preset() {
-		let _ = *preset::BARRIER;
-		dbg!(&preset::BARRIER);
+		dbg!(preset::BARRIER);
+	}
+
+	#[test]
+	fn preset_defaults() {
+		dbg!(preset_defaults::PRESET_DEFAULTS);
 	}
 }
