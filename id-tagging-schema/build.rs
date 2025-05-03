@@ -10,8 +10,7 @@ fn main() -> std::io::Result<()> {
 	// Categories
 	let category_dir = PathBuf::from(path("preset_categories"));
 	let out_dir = std::env::var("OUT_DIR").unwrap();
-
-	// todo: try to use &'static str instead
+	
 	let mut generated = concat!("use std::sync::LazyLock;\n", "use id_tagging_schema_types::*;\n").to_string();
 
 	for entry in read_dir(category_dir)?.map(|x| x.unwrap()) {
