@@ -1,7 +1,7 @@
 pub mod category;
+pub mod discarded;
 pub mod preset;
 pub mod preset_defaults;
-pub mod discarded;
 
 #[cfg(test)]
 mod tests {
@@ -21,7 +21,7 @@ mod tests {
 	fn preset_defaults() {
 		dbg!(preset_defaults::PRESET_DEFAULTS);
 	}
-	
+
 	#[test]
 	fn discarded() {
 		dbg!(discarded::DISCARDED);

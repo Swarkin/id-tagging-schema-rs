@@ -161,7 +161,7 @@ fn main() -> std::io::Result<()> {
 	let json_str = std::fs::read_to_string(preset_defaults_file)?;
 	let preset = serde_json::from_str::<HashMap<String, bool>>(&json_str)?;
 
-	generated.push_str("\npub const DISCARDED: &'static [&'static str] = &[");
+	generated.push_str("\npub const DISCARDED: &[&str] = &[");
 	generated.push_str(&vec_to_str(preset.into_keys()));
 	generated.push_str("];\n");
 
@@ -172,7 +172,5 @@ fn main() -> std::io::Result<()> {
 }
 
 fn vec_to_str(vec: impl IntoIterator<Item = impl std::fmt::Debug>) -> String {
-	vec.into_iter()
-		.map(|x| format!("{x:?}, "))
-		.collect::<String>()
+	vec.into_iter().map(|x| format!("{x:?}, ")).collect::<String>()
 }
