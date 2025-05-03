@@ -1,4 +1,5 @@
 use id_tagging_schema_types::*;
+use std::collections::HashMap;
 use std::fs::read_dir;
 use std::path::PathBuf;
 
@@ -153,10 +154,24 @@ fn main() -> std::io::Result<()> {
 	let dest_path = PathBuf::from(&out_dir).join("preset_defaults.rs");
 	std::fs::write(dest_path, generated)?;
 
+	// discarded.json
+	let mut generated = String::new();
+
+	let preset_defaults_file = PathBuf::from(path("discarded.json"));
+	let json_str = std::fs::read_to_string(preset_defaults_file)?;
+	let preset = serde_json::from_str::<HashMap<String, bool>>(&json_str)?;
+
+	generated.push_str("\npub const DISCARDED: &'static [&'static str] = &[");
+	generated.push_str(&vec_to_str(preset.into_keys()));
+	generated.push_str("];\n");
+
+	let dest_path = PathBuf::from(&out_dir).join("discarded.rs");
+	std::fs::write(dest_path, generated)?;
+
 	Ok(())
 }
 
-fn vec_to_str(vec: Vec<impl std::fmt::Debug>) -> String {
+fn vec_to_str(vec: impl IntoIterator<Item = impl std::fmt::Debug>) -> String {
 	vec.into_iter()
 		.map(|x| format!("{x:?}, "))
 		.collect::<String>()
