@@ -1,176 +1,59 @@
-use id_tagging_schema_types::*;
+use id_tagging_schema_types::deprecated::RawDeprecatedMapping;
 use std::collections::HashMap;
-use std::fs::read_dir;
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
-fn path(path: &str) -> String {
-	format!("id-tagging-schema/data/{path}")
-}
-
 fn main() -> std::io::Result<()> {
-	let out_dir = std::env::var("OUT_DIR").unwrap();
+	/* discarded */ {
+		let mut out = BufWriter::new(File::create(gen_path("discarded.rs"))?);
 
-	// Categories
-	let mut generated = "use id_tagging_schema_types::*;\n".to_string();
+		let json_file = BufReader::new(File::open(osm_path("discarded.min.json"))?);
+		let data: HashMap<String, bool> = serde_json::from_reader(json_file)?;
 
-	let category_dir = PathBuf::from(path("preset_categories"));
-	for entry in read_dir(category_dir)?.map(|x| x.unwrap()) {
-		let path = entry.path();
-
-		if entry.file_type()?.is_file() && path.extension().map(|x| x == "json").unwrap_or(false) {
-			let json_str = std::fs::read_to_string(&path)?;
-			let category = serde_json::from_str::<RawCategory>(&json_str)?;
-
-			let ident = path
-				.file_stem()
-				.unwrap()
-				.to_str()
-				.unwrap()
-				.replace(['-', '.'], "_")
-				.to_uppercase();
-
-			generated.push_str(&format!(
-				concat!(
-					"\npub const {}: Category = Category {{\n",
-					"\ticon: {:?},\n",
-					"\tname: {:?},\n",
-					"\tmembers: &[{}],\n",
-					"}};\n"
-				),
-				ident,
-				category.icon,
-				category.name,
-				category
-					.members
-					.into_iter()
-					.map(|x| format!("{x:?}, "))
-					.collect::<String>()
-			));
+		let mut phf = phf_codegen::Set::<&str>::new();
+		for key in data.keys() {
+			phf.entry(key);
 		}
+
+		writeln!(&mut out, "pub static DISCARDED: phf::Set<&'static str> = {};", phf.build(),)?;
+		out.flush()?;
 	}
 
-	let dest_path = PathBuf::from(&out_dir).join("category_data.rs");
-	std::fs::write(dest_path, generated)?;
+	/* deprecated */ {
+		let mut out = BufWriter::new(File::create(gen_path("deprecated.rs"))?);
 
-	// Presets
-	let mut generated = concat!(
-		"use phf::phf_map;\n",
-		"use id_tagging_schema_types::{*, Geometry::*};\n",
-	)
-	.to_string();
+		let json_file = BufReader::new(File::open(osm_path("deprecated.min.json"))?);
+		let data: Vec<RawDeprecatedMapping> = serde_json::from_reader(json_file)?;
 
-	let preset_dir = PathBuf::from(path("presets"));
-	for entry in read_dir(preset_dir)?.map(|x| x.unwrap()) {
-		let path = entry.path();
-		if entry.file_type()?.is_file() && path.extension().map(|x| x == "json").unwrap() && !path.starts_with("_") {
-			let json_str = std::fs::read_to_string(&path)?;
-			let preset = serde_json::from_str::<RawPreset>(&json_str)?;
+		writeln!(&mut out, "use id_tagging_schema_types::deprecated::DeprecatedMapping;\n")?;
+		writeln!(&mut out, "pub static DEPRECATED: [DeprecatedMapping; {}] = [", data.len())?;
 
-			let ident = path
-				.file_stem()
-				.unwrap()
-				.to_str()
-				.unwrap()
-				.replace(['-', '.'], "_")
-				.to_uppercase();
+		for mapping in data {
+			let mut phf_old = phf_codegen::Map::<&'static str>::new();
+			for (k, v) in &mapping.old {
+				phf_old.entry(k, format!("\"{v}\""));
+			}
 
-			generated.push_str(&format!(
-				concat!(
-					"\npub const {}: Preset = Preset {{\n",
-					"\ticon: {},\n",
-					"\tname: {:?},\n",
-					"\tfields: &[{}],\n",
-					"\tmore_fields: &[{}],\n",
-					"\tgeometry: &{:?},\n",
-					"\ttags: phf_map! {{{}}},\n",
-					"\tterms: &[{}],\n",
-					"\tmatch_score: {},\n",
-					"}};\n"
-				),
-				ident,
-				{
-					let mut string = String::new();
-					match preset.icon {
-						None => {
-							string.push_str("None");
-						}
-						Some(icon) => {
-							string.push_str("Some(\"");
-							string.push_str(&icon);
-							string.push_str("\")");
-						}
-					}
-					string
-				},
-				preset.name,
-				vec_to_str(preset.fields),
-				vec_to_str(preset.more_fields),
-				preset.geometry,
-				{
-					let mut string = String::new();
-					for (k, v) in preset.tags {
-						string.push_str(&format!("\t\"{k}\" => \"{v}\",\n"));
-					}
-					string
-				},
-				vec_to_str(preset.terms),
-				{
-					match preset.match_score {
-						None => String::from("None"),
-						Some(score) => format!("Some(\"{score}\")"),
-					}
-				},
-			));
+			let mut phf_replace = phf_codegen::Map::<&'static str>::new();
+			for (k, v) in &mapping.replace {
+				phf_replace.entry(k, format!("\"{v}\""));
+			}
+
+			writeln!(&mut out, "\tDeprecatedMapping {{ old: {}, replace: {} }},", phf_old.build(), phf_replace.build())?;
 		}
+
+		writeln!(&mut out, "];")?;
+		out.flush()?;
 	}
-
-	let dest_path = PathBuf::from(&out_dir).join("preset_data.rs");
-	std::fs::write(dest_path, generated)?;
-
-	// preset_defaults.json
-	let mut generated = concat!("use id_tagging_schema_types::*;\n").to_string();
-
-	let preset_defaults_file = PathBuf::from(path("preset_defaults.json"));
-	let json_str = std::fs::read_to_string(preset_defaults_file)?;
-	let preset = serde_json::from_str::<RawPresetDefaults>(&json_str)?;
-
-	generated.push_str(&format!(
-		concat!(
-			"\npub const PRESET_DEFAULTS: PresetDefaults = PresetDefaults {{\n",
-			"\tarea: &[{}],\n",
-			"\tline: &[{}],\n",
-			"\tpoint: &[{}],\n",
-			"\tvertex: &[{}],\n",
-			"\trelation: &[{}],\n",
-			"}};\n"
-		),
-		vec_to_str(preset.area),
-		vec_to_str(preset.line),
-		vec_to_str(preset.point),
-		vec_to_str(preset.vertex),
-		vec_to_str(preset.relation),
-	));
-
-	let dest_path = PathBuf::from(&out_dir).join("preset_defaults.rs");
-	std::fs::write(dest_path, generated)?;
-
-	// discarded.json
-	let mut generated = String::new();
-
-	let preset_defaults_file = PathBuf::from(path("discarded.json"));
-	let json_str = std::fs::read_to_string(preset_defaults_file)?;
-	let preset = serde_json::from_str::<HashMap<String, bool>>(&json_str)?;
-
-	generated.push_str("\npub const DISCARDED: &[&str] = &[");
-	generated.push_str(&vec_to_str(preset.into_keys()));
-	generated.push_str("];\n");
-
-	let dest_path = PathBuf::from(&out_dir).join("discarded.rs");
-	std::fs::write(dest_path, generated)?;
 
 	Ok(())
 }
 
-fn vec_to_str(vec: impl IntoIterator<Item = impl std::fmt::Debug>) -> String {
-	vec.into_iter().map(|x| format!("{x:?}, ")).collect::<String>()
+fn osm_path(path: &str) -> PathBuf {
+	PathBuf::from(format!("id-tagging-schema/dist/{path}"))
+}
+
+fn gen_path(path: &str) -> PathBuf {
+	PathBuf::from(format!("{}/{path}", std::env::var("OUT_DIR").unwrap()))
 }

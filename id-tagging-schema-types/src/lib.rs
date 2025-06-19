@@ -1,17 +1,6 @@
-mod category;
-mod preset;
-mod preset_defaults;
+pub mod deprecated;
 
-pub use category::*;
-pub use preset::*;
-pub use preset_defaults::*;
-
-#[derive(Debug, Copy, Clone, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Geometry {
-	Point,
-	Line,
-	Area,
-	Relation,
-	Vertex,
-}
+// pub struct TaggingSchema {
+// 	pub discarded: phf::Set<&'static str>,
+// 	pub deprecated: Vec<deprecated::DeprecatedMapping>,
+// }

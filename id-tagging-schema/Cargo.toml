@@ -4,13 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-serde.workspace = true
 serde_json.workspace = true
 phf.workspace = true
 id-tagging-schema-types.workspace = true
 
 [build-dependencies]
-serde.workspace = true
 serde_json.workspace = true
-phf.workspace = true
+phf_codegen.workspace = true
 id-tagging-schema-types.workspace = true
