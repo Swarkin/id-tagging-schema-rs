@@ -26,8 +26,8 @@ fn main() -> std::io::Result<()> {
 		let json_file = BufReader::new(File::open(osm_path("deprecated.min.json"))?);
 		let data: Vec<RawDeprecatedMapping> = serde_json::from_reader(json_file)?;
 
-		writeln!(&mut out, "use id_tagging_schema_types::deprecated::DeprecatedMapping;\n")?;
-		writeln!(&mut out, "pub static DEPRECATED: [DeprecatedMapping; {}] = [", data.len())?;
+		writeln!(&mut out, "use id_tagging_schema_types::deprecated::DeprecatedMapping;")?;
+		write!(&mut out, "pub static DEPRECATED: [DeprecatedMapping; {}] = [", data.len())?;
 
 		for mapping in data {
 			let mut phf_old = phf_codegen::Map::<&'static str>::new();
@@ -40,11 +40,26 @@ fn main() -> std::io::Result<()> {
 				phf_replace.entry(k, format!("\"{v}\""));
 			}
 
-			writeln!(&mut out, "\tDeprecatedMapping {{ old: {}, replace: {} }},", phf_old.build(), phf_replace.build())?;
+			write!(&mut out, "DeprecatedMapping {{ old: {}, replace: {} }},", phf_old.build(), phf_replace.build())?;
 		}
 
-		writeln!(&mut out, "];")?;
+		write!(&mut out, "];")?;
 		out.flush()?;
+	}
+
+	/* preset defaults */ {
+		let mut out = BufWriter::new(File::create(gen_path("preset_defaults.rs"))?);
+
+		let json_file = BufReader::new(File::open(osm_path("preset_defaults.min.json"))?);
+		let data: HashMap<String, Vec<String>> = serde_json::from_reader(json_file)?;
+
+		for (k, v) in &data {
+			write!(&mut out, "pub static {}: [&'static str; {}] = [", k.to_uppercase(), v.len())?;
+			for entry in v {
+				write!(&mut out, "\"{entry}\", ")?;
+			}
+			writeln!(&mut out, "];")?;
+		}
 	}
 
 	Ok(())
